@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Form, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse
 import yt_dlp
 import os
 import tempfile
@@ -11,36 +11,35 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Serve the frontend HTML at the root
-@app.get("/")
-async def root():
-    try:
-        with open("index.html", "r") as f:
-            html_content = f.read()
-        return HTMLResponse(content=html_content, status_code=200)
-    except Exception as e:
-        logger.error(f"Error serving index.html: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-# Download endpoint
+# Download endpoint (no root endpoint now, as frontend is static)
 @app.post("/download")
 async def download_video(url: str = Form(...)):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    # Temporary file path (Vercel allows /tmp)
+    # Path to bundled FFmpeg binary
+    ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg')
+
+    # Ensure FFmpeg is executable (redundant if set in git, but safe)
+    try:
+        os.chmod(ffmpeg_path, 0o755)
+    except Exception as e:
+        logger.warning(f"Could not chmod FFmpeg: {str(e)}")
+
+    # Temporary file path
     with tempfile.TemporaryDirectory() as tmpdir:
         ydl_opts = {
             'outtmpl': os.path.join(tmpdir, '%(title)s.%(ext)s'),
             'quiet': True,
             'no_warnings': True,
-            'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]',  # Smaller format for Vercel
-            'socket_timeout': 30,  # Timeout after 30 seconds
-            'retries': 2,  # Retry twice on failure
+            'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]',  # Requires FFmpeg for merge
+            'ffmpeg_location': ffmpeg_path,  # Use bundled FFmpeg
+            'socket_timeout': 30,
+            'retries': 2,
         }
 
         try:
-            logger.info(f"Starting download for URL: {url}")
+            logger.info(f"Starting download for URL: {url} with FFmpeg at {ffmpeg_path}")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 filename = ydl.prepare_filename(info)
@@ -50,7 +49,6 @@ async def download_video(url: str = Form(...)):
                     logger.error("Downloaded file not found")
                     raise HTTPException(status_code=500, detail="Download failed: File not found")
 
-                # Get the actual filename after download
                 actual_filename = os.path.basename(filepath)
                 logger.info(f"Download successful, serving file: {actual_filename}")
 
