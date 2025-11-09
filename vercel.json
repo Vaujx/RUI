@@ -1,16 +1,27 @@
+
+
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "main.py",
-      "use": "@vercel/python",
-      "config": { "pythonVersion": "3.12" }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "main.py"
-    }
-  ]
+"version": 2,
+"builds": [
+ {
+   "src": "main.py",
+   "use": "@vercel/python",
+   "config": { "pythonVersion": "3.12" }
+ },
+ {
+   "src": "index.html",
+   "use": "@vercel/static"
+ }
+],
+"routes": [
+ {
+   "src": "/download",
+   "methods": ["POST"],
+   "dest": "main.py"
+ },
+ {
+   "src": "/(.*)",
+   "dest": "/index.html"
+ }
+]
 }
